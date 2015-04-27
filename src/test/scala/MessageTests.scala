@@ -3,13 +3,14 @@ import Shrink._
 import Gen._
 import Arbitrary.arbitrary
 import Prop._
-import Messages._
 import scodec.bits._
 import scodec._
 import scodec.bits._
 import codecs._
 import scalaz._
 import Scalaz._
+
+import Messages._
 
 object MessageArbitrary {
   
@@ -31,19 +32,7 @@ object MessageArbitrary {
 
 import MessageArbitrary._
 
-abstract class MessageProperties(name: String) extends EngineProperties(name){
-  def successOrDie[T](a:Attempt[T]) : T = a.fold(e => sys.error(e.message), identity)
-  def roundTripTest[T: Equal](c:Codec[T])(t:T): Boolean = roundTrip(c)(t) === t
-  def roundTrip[T: Equal](c:Codec[T])(t:T): T = successOrDie(roundTripAttempt(c)(t))
-  def roundTripAttempt[T](c:Codec[T])(t:T): Attempt[T] = 
-    for { bv <- c.encode(t); dr <- c.decode(bv) } yield dr.value
-}
+object MessageTests extends EngineProperties("MessageTests") {
 
-object MessageTests extends EngineProperties("MessageTests") {}
-
-object ProtocolAProperties extends MessageProperties("ProtocolA tests"){
-  import ProtocolA._
-  test("round-trip message type")(forAll ((m: MessageType) => roundTripTest(messageTypeCodec)(m)))
-  test("round-trip")(forAll((m: Message) => roundTripTest(messageCodec)(m)))
 }
 
