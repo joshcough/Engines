@@ -1,3 +1,5 @@
+package com.joshcough.engines
+
 import org.scalacheck._
 import Shrink._
 import Gen._

@@ -1,3 +1,5 @@
+package com.joshcough.engines
+
 import org.scalacheck.{Prop, Properties}
 import org.scalacheck.Prop._
 

@@ -1,3 +1,5 @@
+package com.joshcough.engines
+
 import scalaz.stream._
 
 import Cause._

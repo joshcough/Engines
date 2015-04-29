@@ -1,3 +1,5 @@
+package com.joshcough.engines
+
 import scodec._
 import scodec.bits._
 import codecs._
