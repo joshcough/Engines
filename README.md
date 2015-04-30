@@ -10,3 +10,4 @@ In second terminal:
     ./sbt
     > runMain com.joshcough.engines.SenderSocket
 
+Observe that nothing happens. I expected to see messages printed out. 
