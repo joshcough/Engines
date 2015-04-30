@@ -1,0 +1,62 @@
+in this engine
+
+  * clients have dedicated connections (in both directions)
+  * clients create their own msg id
+  * clients can optionally choose a destination
+  * message types are buy, sell, and maybe stop will be added too
+  * messages must contain id, message type, shares, price, Maybe destination
+     the maybe destination is in case they want to send the message to a particular exchance
+     if it is not supplied, the ToExchange router must decide, but how?
+     maybe we just have some map from ticker to the exchange it lives on.
+     or maybe a ticker can live on multiple exchanges? then it could make a decision,
+     but based on what? could make something up like whichever one has received the fewest messages.
+     but that requires the router to have state. 
+     maybe a ticker could have a prioritized list of exchanges?
+
+  * exchanges take in those messages, maybe update some state (make believe state), return a message
+  * that message contains id, type, shares, price, Just destination
+     
+since the return message always contain the destination (the original client)
+the ToClient router is very simple, it has a map from clients to their sockets (or whatever)
+and it just translates the message and puts it on the wire.
+
+internal to the engine we can therefore use the same datatype in both direction
+
+type MsgId   = Int
+type Shares  = Int
+type Price   = Double
+data MsgType = Buy | Sell | Stop
+data Msg     = Msg MsgId MessageType Shares Price (Maybe Destination)
+
+Translation: Clients and Exchanges need to speak a particular protocol, and 
+the engines translator must translate the messages fromt he inbound protocol to the outbound.
+this probably requires having translators to and from every protocol.
+
+how does the engine know what dedicated connections it has? 
+can it add connections on the fly? or do it once all up front via some configuration? 
+there must be some sort of mutable state here, to create all the connections. 
+not sure how that is done just yet
+
+
+clients can just send more or less random data in their messages, for version 1. 
+exchanges can also reply with random data. 
+this keeps both very simple. and in fact, its possible that they are the same,
+with the minor exception that clients dont have to send a destination, but exchanges do.
+
+of course, we could have maintain a mutable map in the engine that contains msgid -> client,
+but this causes problems. like, what if two clients send the same message id? 
+we could have one map per client in that case, which is probably better anyway.
+
+Big question: 
+  do clients have to wait for messages to return, before sending another message?
+  we could have this rule, and have them not wait in version 2. 
+
+Big question: 
+  what happens if a client dies, or more importantly, an exchange dies?
+  
+  * if a client dies, it might miss messages coming back to it. 
+    i think in this version we won't deal with that problem.
+
+  * if an exchange dies, we can send messages to the other exchanges, or reply STOP.
+    maybe stop should have a reason? could be a string or an int or whatever.
+

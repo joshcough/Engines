@@ -1,0 +1,6 @@
+Engine1: Direct Connections, Wait for response
+Engine2: Direct Connections, don't wait for response, fill up queues
+Engine3: Direct Connections, deal with reconnections.
+
+Engine4: Totally different. Infinite clients, one queue per exchange.
+      this needs to be thought through a bunch more. 
