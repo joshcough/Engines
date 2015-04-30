@@ -15,7 +15,7 @@ import Scalaz._
 import Messages._
 import MessageArbitrary._
 
-abstract class MessageProperties(name: String) extends EngineProperties(name){
+abstract class ProtocolProperties(name: String) extends EngineProperties(name){
   def successOrDie[T](a:Attempt[T]) : T = a.fold(e => sys.error(e.message), identity)
   def roundTripTest[T: Equal : Codec](t:T): Boolean = roundTrip(t) === t
   def roundTrip[T: Equal : Codec](t:T): T = successOrDie(roundTripAttempt(t))
@@ -25,7 +25,7 @@ abstract class MessageProperties(name: String) extends EngineProperties(name){
   }
 }
 
-object ProtocolAProperties extends MessageProperties("ProtocolA tests"){
+object ProtocolAProperties extends ProtocolProperties("ProtocolA tests"){
   import ProtocolA._
   test("round-trip message type")(forAll ((m: MessageType) => roundTripTest(m)))
   test("round-trip")(forAll((m: Message) => roundTripTest(m)))

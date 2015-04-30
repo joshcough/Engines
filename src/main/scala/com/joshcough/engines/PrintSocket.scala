@@ -1,37 +1,66 @@
 package com.joshcough.engines
 
 import scalaz.stream._
-
-import Cause._
+import tcp._
 import Process._
 import java.net.InetSocketAddress
-import java.util.concurrent.CountDownLatch
-import scala.concurrent.SyncVar
-import scala.util.Random
-import scalaz.-\/
 import scalaz.\/
-import scalaz.\/-
 import scalaz.concurrent.{Strategy,Task}
-import scalaz.stream.Process.Halt
-import scalaz.stream.ReceiveY._
 import scalaz.syntax.monad._
 import scodec._
-import scodec.bits._
+import bits._
 import codecs._
+import stream.{encode,StreamEncoder, decode => D, StreamDecoder}
 
-object PrintSocket {
+object SCodecStreamSockets {
+  def encodeToSocket[T](p: Process[Nothing,T])
+    (implicit c: Codec[T]): Process[Connection, ByteVector] = {
+    val encoder : Process1[T,BitVector] = encode.many(c).encoder
+    tcp.lift(p.toSource |> encoder.map(_.toByteVector))
+  }
 
+  def decodeFromSocket[T:Codec]: Process[Connection,T] =
+    tcp.reads(10).map(_.toBitVector) |> scodec.stream.decode.process[T]
+}
+
+import SCodecStreamSockets._
+
+
+object Sockets {
+  val addr = new InetSocketAddress("localhost", 8007)
   implicit val S = scalaz.concurrent.Strategy.DefaultStrategy
   implicit val AG = tcp.DefaultAsynchronousChannelGroup
-  val E = java.util.concurrent.Executors.newCachedThreadPool
-  val S2 = Strategy.Executor(E)
+}
+
+import Sockets._
+import Messages._
+import ProtocolA._
+
+// This guy open a socket, reads stuff, and prints it.
+object PrintSocket {
   import tcp.syntax._
 
-  def addr(offset:Int) = new InetSocketAddress("localhost", 8000 + offset)
-  def server(addr:InetSocketAddress) = 
-    tcp.server(addr, concurrentRequests = 1)(tcp.reads(1024).to(io.stdOutBytes).repeat).join  
+  val s: Process[Task,Throwable\/Unit] = 
+    tcp.server(addr, concurrentRequests = 1)(
+      decodeFromSocket[Message].map(_.toString).to(io.stdOut)
+    ).join
 
-  def main(args: Array[String]): Unit = {
-    server(addr(args(0).toInt)).run.run
-  }
+  def main(args: Array[String]): Unit = s.run.run
 }
+
+// This guy sends scodec serialized messages
+object SenderSocket {
+  import tcp.syntax._
+
+  val messages = List(
+    Message(0, "Josh", Buy,  "APPL", 50, 600)
+   ,Message(0, "Paul", Sell, "GOOG", 10, 500)
+   ,Message(0, "Mike", Buy,  "MSFT", 50,  95)
+  )
+
+  val encoder = encodeToSocket(Process(messages:_*))
+
+  def main(args: Array[String]): Unit = tcp.connect(addr)(encoder).run.run
+}
+
+
