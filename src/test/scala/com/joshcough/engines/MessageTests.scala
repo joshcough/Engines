@@ -12,13 +12,13 @@ import codecs._
 import scalaz._
 import Scalaz._
 
-import Messages._
+import MessagesTypes._
 
 object MessageArbitrary {
   
   val arbInt8 = Gen.choose(0,255)
   val arbId: Gen[MessageId] = arbitrary[Int]
-  val arbTicker: Gen[Stock] = oneOf("MSFT", "GOOG")
+  val arbTicker: Gen[Ticker] = oneOf("MSFT", "GOOG")
 
   implicit val arbMessageType: Arbitrary[MessageType] = Arbitrary(oneOf(Buy,Sell))
 

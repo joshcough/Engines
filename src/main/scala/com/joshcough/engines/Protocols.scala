@@ -5,7 +5,6 @@ import scodec.bits._
 import codecs._
 
 object ProtocolA {
-  import Messages._
   implicit val messageTypeCodec : Codec[MessageType] =
     mappedEnum(uint8, Buy -> 1, Sell -> 2)
   implicit val messageCodec : Codec[Message] =

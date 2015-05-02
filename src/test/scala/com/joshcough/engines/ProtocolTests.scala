@@ -12,7 +12,7 @@ import codecs._
 import scalaz._
 import Scalaz._
 
-import Messages._
+import MessagesTypes._
 import MessageArbitrary._
 
 abstract class ProtocolProperties(name: String) extends EngineProperties(name){
