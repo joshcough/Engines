@@ -38,19 +38,19 @@ object PrintSocket {
   import tcp.syntax._
   val s: Process[Task,Throwable\/Unit] = 
     tcp.server(addr, concurrentRequests = 1)(
-      decodeFromSocket[Message].map(_.toString).to(io.stdOut).repeat
+      decodeFromSocket[Order].map(_.toString).to(io.stdOut).repeat
     ).join
   def main(args: Array[String]): Unit = s.run.run
 }
 
-// This guy sends scodec serialized messages
+// This guy sends scodec serialized Orders
 object SenderSocket {
   import tcp.syntax._
-  val messages = List(
-    Message(0, "Josh", Buy,  "APPL", 50, 600)
-   ,Message(0, "Paul", Sell, "GOOG", 10, 500)
-   ,Message(0, "Mike", Buy,  "MSFT", 50,  95)
+  val Orders = List(
+    Order(0, "Josh", Bid, "APPL", 50, 600)
+   ,Order(0, "Paul", Ask, "GOOG", 10, 500)
+   ,Order(0, "Mike", Bid, "MSFT", 50,  95)
   )
-  val encoder = encodeToSocket(Process(messages:_*))
+  val encoder = encodeToSocket(Process(Orders:_*))
   def main(args: Array[String]): Unit = tcp.connect(addr)(encoder).run.run
 }
