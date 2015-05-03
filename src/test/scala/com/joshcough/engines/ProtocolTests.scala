@@ -12,8 +12,8 @@ import codecs._
 import scalaz._
 import Scalaz._
 
-import MessagesTypes._
-import MessageArbitrary._
+import OrderTypes._
+import OrderArbitrary._
 
 abstract class ProtocolProperties(name: String) extends EngineProperties(name){
   def successOrDie[T](a:Attempt[T]) : T = a.fold(e => sys.error(e.message), identity)
@@ -27,7 +27,7 @@ abstract class ProtocolProperties(name: String) extends EngineProperties(name){
 
 object ProtocolAProperties extends ProtocolProperties("ProtocolA tests"){
   import ProtocolA._
-  test("round-trip message type")(forAll ((m: MessageType) => roundTripTest(m)))
-  test("round-trip")(forAll((m: Message) => roundTripTest(m)))
+  test("round-trip Order type")(forAll ((m: OrderType) => roundTripTest(m)))
+  test("round-trip")(forAll((m: Order) => roundTripTest(m)))
 }
 

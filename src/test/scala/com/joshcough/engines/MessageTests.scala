@@ -12,29 +12,29 @@ import codecs._
 import scalaz._
 import Scalaz._
 
-import MessagesTypes._
+import OrderTypes._
 
-object MessageArbitrary {
+object OrderArbitrary {
   
   val arbInt8 = Gen.choose(0,255)
-  val arbId: Gen[MessageId] = arbitrary[Int]
+  val arbId: Gen[OrderId] = arbitrary[Int]
   val arbTicker: Gen[Ticker] = oneOf("MSFT", "GOOG")
 
-  implicit val arbMessageType: Arbitrary[MessageType] = Arbitrary(oneOf(Buy,Sell))
+  implicit val arbOrderType: Arbitrary[OrderType] = Arbitrary(oneOf(Bid,Ask))
 
-  implicit val arbMessage: Arbitrary[Message] = Arbitrary(for { 
+  implicit val arbOrder: Arbitrary[Order] = Arbitrary(for { 
     mid <- arbInt8
     cid <- identifier
-    ty  <- arbitrary[MessageType]
+    ty  <- arbitrary[OrderType]
     tic <- arbTicker
     sh  <- arbInt8
     pri <- arbitrary[Double].map(math.abs)
-  } yield Message(mid, cid, ty, tic, sh, pri))
+  } yield Order(mid, cid, ty, tic, sh, pri))
 }
 
-import MessageArbitrary._
+import OrderArbitrary._
 
-object MessageTests extends EngineProperties("MessageTests") {
+object OrderTests extends EngineProperties("OrderTests") {
 
 }
 
