@@ -2,6 +2,8 @@ package com.joshcough.engines
 package exchange
 
 import scalaz.{Order => Ord, _}
+import syntax.applicative._
+import syntax.monad._
 import Scalaz._
 import scala.annotation.tailrec
 
@@ -17,19 +19,35 @@ object ExchangeTypes {
 
 import ExchangeTypes._
 
-// TODO: who sends the fills back?
-case class MutableExchange(private var e: Exchange) {
-  def transaction(m: Order): Transaction = {
-    val (t, newE) = e.transaction(m)
-    e = newE
-    t
-  }
+object StateFunctions {
+  def update[S, A](f: S => (A, S)): State[S, A] = for {
+    s       <- get[S]
+    (a, s2) = f(s)
+    _       <- put(s2)
+  } yield a
+
+  def stateTransaction[S](o: Order, s: S)
+    (implicit t: TransactionRunner[S]): State[S, Transaction] = 
+      update(s => t.runTransaction(o, s))
 }
 
-case class Exchange(m: Market) {
-  def transaction(msg: Order): TransactionResult[Exchange] = {
-    val (t, newMarket) = m.transaction(msg)
-    (t, Exchange(newMarket))
+object TransactionRunner {
+  def runTransaction[S]
+    (o: Order, s: S)
+    (implicit t: TransactionRunner[S]): (Transaction, S) = t.runTransaction(o, s)
+}
+
+trait TransactionRunner[S] {
+  def runTransaction(o: Order, s: S): (Transaction, S)
+
+  def stateTransaction(o: Order)(implicit t: TransactionRunner[S]): State[S, Transaction] = 
+    StateFunctions.update(s => t.runTransaction(o, s))
+
+  def trasactions
+    (orders: List[Order])
+    (implicit t: TransactionRunner[S]): State[S, List[Transaction]] = {
+    type X[A] = State[S, A]
+    orders.traverse[X,Transaction](t.stateTransaction(_))
   }
 }
 
@@ -69,15 +87,9 @@ trait Transaction {
         List(origin, fillers, additionalShares, filler).toString)
   }
 
-/*
-  A Market is just a collection of stocks
- */
-case class Market(stocks: Map[Ticker, Market]) {
-  def transaction(order: Order): TransactionResult[Market] = {
-  	stocks.get(order.ticker).fold((Unfilled(order): Transaction, this)){ stock => 
-  	  val (t, newStock) = stock.transaction(order)
-  	  (t, Market(stocks + (order.ticker -> newStock)))
-  	}
+object Stock {
+  implicit val stockTransactionRunner: TransactionRunner[Stock] = new TransactionRunner[Stock] {
+    def runTransaction(o: Order, s: Stock) = s.transaction(o) 
   }
 }
 
@@ -91,20 +103,16 @@ case class Market(stocks: Map[Ticker, Market]) {
  than the asking price of the lowest ask.
  (Which means that no one is willing to pay the asking price)
  */
-case class Stock(
+case class Stock (
   ticker: Ticker, 
   bids: MaxHeap[Order]=Heap.Empty[Order], 
-  asks: MinHeap[Order]=Heap.Empty[Order]) {
+  asks: MinHeap[Order]=Heap.Empty[Order]){
 
   def transaction(order: Order): (Transaction, Stock) = 
     order.orderType match {
       case Bid => bid(order)
       case Ask => ask(order)
     }
-
-  def trasactAll(orders: List[Order]): (List[Transaction], Stock) = {
-    ???
-  }
 
   private def bid(o: Order): (Transaction, Stock) = {
     val (t2, newAsks, newBids) = 
@@ -123,7 +131,7 @@ case class Stock(
   }
 
   @tailrec
-  private def fillOrder(
+  private def fillOrder (
     order          : Order, 
     trans          : Transaction, 
     drawHeap       : Heap[Order], 
@@ -187,6 +195,41 @@ case class Stock(
           entryHeapOrder
         )(priceMatch)
     }
+  }
+}
+
+/*
+  A Market is just a collection of stocks
+ */
+case class Market(stocks: Map[Ticker, Stock]) 
+
+object Market {
+  implicit val marketTransactionRunner: TransactionRunner[Market] = new TransactionRunner[Market] {
+    def runTransaction(o: Order, m: Market) = 
+      m.stocks.get(o.ticker).fold((Unfilled(o): Transaction, m)){ s => 
+        val (t, newStock) = TransactionRunner.runTransaction(o, s)
+        (t, Market(m.stocks + (o.ticker -> newStock)))
+      }
+  }
+}
+
+case class Exchange(market: Market)
+
+object Exchange {
+  implicit val exchangeTransactionRunner: TransactionRunner[Exchange] = new TransactionRunner[Exchange] {
+    def runTransaction(o: Order, e: Exchange) = {
+      val (t, newMarket) = TransactionRunner.runTransaction(o, e.market)
+      (t, Exchange(newMarket))
+    }
+  }
+}
+
+// TODO: who sends the fills back?
+case class MutableExchange(private var e: Exchange) {
+  def transaction(o: Order): Transaction = {
+    val (t, newE) = TransactionRunner.runTransaction(o, e)
+    e = newE
+    t
   }
 }
 
