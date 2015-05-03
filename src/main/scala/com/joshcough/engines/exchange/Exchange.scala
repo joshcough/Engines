@@ -1,4 +1,5 @@
 package com.joshcough.engines
+package exchange
 
 import scalaz.{Order => Ord, _}
 import Scalaz._
@@ -43,27 +44,30 @@ trait Transaction {
   def isEmpty : Boolean = shares == 0
   def fill(additionalShares: Shares, filler: Order): Transaction
 }
-// An Unfilled Transaction has no shares filled.
-case class Unfilled(origin: Order) extends Transaction {
-  val shares = 0
-  def fill(s: Shares, filler: Order) = PartialFill(s, List(filler), origin)
-}
-// A PartialFill has a number of shares filled, but less than wanted.
-case class PartialFill(
-  shares:  Shares, 
-  fillers: List[Order], 
-  origin:  Order) extends Transaction {
-  def fill(additionalShares: Shares, filler: Order) = 
-    if (shares + additionalShares == origin.shares) Fill(origin, filler :: fillers)
-    else copy(shares=shares+additionalShares, fillers=filler :: fillers)
-}
-// A Fill is a completely filled Order
-case class Fill(origin: Order, fillers: List[Order]) extends Transaction {
-  def shares = origin.shares
-  def fill(additionalShares: Shares, filler: Order) = 
-    sys.error("can't fill an already full order: " ++ 
-      List(origin, fillers, additionalShares, filler).toString)
-}
+
+  // An Unfilled Transaction has no shares filled.
+  case class Unfilled(origin: Order) extends Transaction {
+    val shares = 0
+    def fill(s: Shares, filler: Order) = PartialFill(s, List(filler), origin)
+  }
+
+  // A PartialFill has a number of shares filled, but less than wanted.
+  case class PartialFill(
+    shares:  Shares, 
+    fillers: List[Order], 
+    origin:  Order) extends Transaction {
+    def fill(additionalShares: Shares, filler: Order) = 
+      if (shares + additionalShares == origin.shares) Fill(origin, filler :: fillers)
+      else copy(shares=shares+additionalShares, fillers=filler :: fillers)
+  }
+
+  // A Fill is a completely filled Order
+  case class Fill(origin: Order, fillers: List[Order]) extends Transaction {
+    def shares = origin.shares
+    def fill(additionalShares: Shares, filler: Order) = 
+      sys.error("can't fill an already full order: " ++ 
+        List(origin, fillers, additionalShares, filler).toString)
+  }
 
 /*
   A Market is just a collection of stocks
@@ -87,37 +91,45 @@ case class Market(stocks: Map[Ticker, Market]) {
  than the asking price of the lowest ask.
  (Which means that no one is willing to pay the asking price)
  */
-case class Stock(ticker: Ticker, bids: MaxHeap[Order], asks: MinHeap[Order]) {
-  import Stock._
-  def transaction(order: Order) = order.orderType match {
-    case Bid => Stock.bid(order, this, Unfilled(order))
-    case Ask => Stock.ask(order, this, Unfilled(order))
-  }
-}
+case class Stock(
+  ticker: Ticker, 
+  bids: MaxHeap[Order]=Heap.Empty[Order], 
+  asks: MinHeap[Order]=Heap.Empty[Order]) {
 
-object Stock {
-  
-  def bid(o: Order, s: Stock, t: Transaction): (Transaction, Stock) = {
-    val (t2, newAsks) = fillOrder(o, s.asks, t, Order.bidOrdering) { 
-      (bidPrice, askPrice) => bidPrice >= askPrice
+  def transaction(order: Order): (Transaction, Stock) = 
+    order.orderType match {
+      case Bid => bid(order)
+      case Ask => ask(order)
     }
-    (t2, s.copy(asks=newAsks))
+
+  def trasactAll(orders: List[Order]): (List[Transaction], Stock) = {
+    ???
   }
 
-  def ask(o: Order, s: Stock, t: Transaction): (Transaction, Stock) = {
-    val (t2, newBids) = fillOrder(o, s.bids, t, Order.askOrdering) { 
-      (askPrice, bidPrice) => askPrice <= bidPrice  
-    }
-    (t2, s.copy(bids=newBids))
+  private def bid(o: Order): (Transaction, Stock) = {
+    val (t2, newAsks, newBids) = 
+      fillOrder(o, Unfilled(o), asks, bids, Order.bidOrdering) { 
+        (bidPrice, askPrice) => bidPrice >= askPrice
+      }
+    (t2, copy(bids=newBids, asks=newAsks))
+  }
+
+  private def ask(o: Order): (Transaction, Stock) = {
+    val (t2, newBids, newAsks) = 
+      fillOrder(o, Unfilled(o), bids, asks, Order.askOrdering) { 
+        (askPrice, bidPrice) => askPrice <= bidPrice  
+      }
+    (t2, copy(bids=newBids, asks=newAsks))
   }
 
   @tailrec
-  def fillOrder(
-    order      : Order, 
-    heap       : Heap[Order], 
-    trans      : Transaction, 
-    heapOrder  : Ord[Order])
-   (priceMatch : (Price, Price) => Boolean): (Transaction, Heap[Order]) = {
+  private def fillOrder(
+    order          : Order, 
+    trans          : Transaction, 
+    drawHeap       : Heap[Order], 
+    entryHeap      : Heap[Order], 
+    entryHeapOrder : Ord[Order])
+   (priceMatch     : (Price, Price) => Boolean): (Transaction, Heap[Order], Heap[Order]) = {
     /*
        If either:
          * we have no asks
@@ -128,10 +140,10 @@ object Stock {
          then we do not add it to the heap, we send the PartialFill back to the client
          otherwise we add it to the bids awaiting fulfillment
      */
-    if (heap.isEmpty || ! priceMatch(order.price, heap.minimum.price)) 
+    if (drawHeap.isEmpty || ! priceMatch(order.price, drawHeap.minimum.price)) 
       trans match {
-        case Unfilled(_) => (trans, heap.insert(order)(heapOrder))
-        case _           => (trans, heap)
+        case Unfilled(_) => (trans, drawHeap, entryHeap.insert(order)(entryHeapOrder))
+        case _           => (trans, drawHeap, entryHeap)
       }
     /* 
      We can now either partially fill, or completely fill the order.
@@ -148,29 +160,31 @@ object Stock {
      */
     // to get the minimum frOrder a Heap, call: h.minimum
     else {
-      val min = heap.minimum
+      val min = drawHeap.minimum
       val newTransaction = trans.fill(order.shares, min)
 
       // PERFECT FILL
       if (min.shares == order.shares)
         // we can completely fill the bid.
-        (newTransaction, heap.deleteMin)
+        (newTransaction, drawHeap.deleteMin, entryHeap)
       // FILL, keeping the current node on top of the heap, adjusting it's shares. 
       else if (min.shares > order.shares)
         // we can completely fill the bid, but the bids shares 
         // must be removed from the ask on top of the heap
-        (newTransaction, heap.adjustMin(o=>o.copy(shares=o.shares-order.shares)))
+        (newTransaction, drawHeap.adjustMin(o=>o.copy(shares=o.shares-order.shares)), entryHeap)
       // PARTIAL FILL
       else
         // we can't completely fill the bid, so we need to recur.
         fillOrder(
           // we recur needing fewer shares, since we filled min.shares shares.
           order.copy(shares=order.shares - min.shares),
-          // min.shares is now empty, so it is deleted
-          heap.deleteMin,
-          // min is preserved in the transaction, though
+          // min is preserved in the transaction
           newTransaction,
-          heapOrder
+          // min.shares is now empty, so it is deleted
+          drawHeap.deleteMin,
+          // nothing happens to the entry heap
+          entryHeap,
+          entryHeapOrder
         )(priceMatch)
     }
   }
