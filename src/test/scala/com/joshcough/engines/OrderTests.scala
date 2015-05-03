@@ -25,7 +25,7 @@ object OrderArbitrary {
 
   val genOrder: Gen[Order] = for { 
     mid <- arbId.map(math.abs)
-    cid <- identifier
+    cid <- identifier.map(_.take(10))
     ty  <- arbitrary[OrderType]
     tic <- arbTicker
     sh  <- arbInt8

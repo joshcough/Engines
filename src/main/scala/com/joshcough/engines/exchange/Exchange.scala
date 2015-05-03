@@ -93,6 +93,9 @@ case class Stock (
     // to get the minimum frOrder a Heap, call: h.minimum
     else {
       val min = drawHeap.minimum
+      // TODO: the problem with min here is that we might have only filled
+      // some of the shares in it. we might need to send back
+      // a partial fill to the client
       val newTransaction = trans.fill(order.shares, min)
 
       // PERFECT FILL

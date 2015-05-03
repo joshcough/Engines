@@ -19,23 +19,21 @@ object StateFunctions {
 }
 
 object TransactionRunner {
-  def runTransaction[S]
-    (o: Order, s: S)
+  def runTransaction[S](o: Order, s: S)
     (implicit t: TransactionRunner[S]): (Transaction, S) = t.runTransaction(o, s)
+
+  def stateTransaction[S](o: Order)(implicit t: TransactionRunner[S]): State[S, Transaction] = 
+    StateFunctions.update(s => t.runTransaction(o, s))
+
+  def stateTransactions[S](orders: List[Order])
+    (implicit t: TransactionRunner[S]): State[S, List[Transaction]] = {
+    type X[A] = State[S, A]
+    orders.traverse[X,Transaction](stateTransaction(_))
+  }  
 }
 
 trait TransactionRunner[S] {
   def runTransaction(o: Order, s: S): (Transaction, S)
-
-  def stateTransaction(o: Order)(implicit t: TransactionRunner[S]): State[S, Transaction] = 
-    StateFunctions.update(s => t.runTransaction(o, s))
-
-  def trasactions
-    (orders: List[Order])
-    (implicit t: TransactionRunner[S]): State[S, List[Transaction]] = {
-    type X[A] = State[S, A]
-    orders.traverse[X,Transaction](t.stateTransaction(_))
-  }
 }
 
 /*
