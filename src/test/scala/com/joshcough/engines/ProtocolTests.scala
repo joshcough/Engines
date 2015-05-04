@@ -27,7 +27,7 @@ abstract class ProtocolProperties(name: String) extends EngineProperties(name){
 
 object ProtocolAProperties extends ProtocolProperties("ProtocolA tests"){
   import ProtocolA._
-  test("round-trip Order type")(forAll ((m: OrderType) => roundTripTest(m)))
-  test("round-trip")(forAll((m: Order) => roundTripTest(m)))
+  //test("round-trip Order type")(forAll ((m: OrderType) => roundTripTest(m)))
+  //test("round-trip")(forAll((m: Order) => roundTripTest(m)))
 }
 
