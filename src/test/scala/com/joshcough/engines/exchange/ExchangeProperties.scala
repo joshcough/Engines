@@ -5,6 +5,7 @@ import org.scalacheck._
 import org.scalacheck.Prop._
 import Gen.{listOf, oneOf}
 import scalaz.{Order => Ord, _}
+import Ordering._
 import Scalaz._
 
 import OrderTypes._
@@ -20,50 +21,62 @@ import StockArbitrary._
 
 object StockTests extends EngineProperties("StockTests") {
 
-/*
   test("simple")(forAll ((s: Stock) => s.bids.isEmpty && s.asks.isEmpty))
 
-  test("add bid")(Prop.forAll(genBid){ (o: Order) => 
+  test("add bid")(forAll(genBid){ (o: Order) => 
   	val (t, sOut) = TransactionRunner.runTransaction(o, Stock(o.ticker))
-  	t == Unfilled(o) && sOut.bids.minimum == o
+    val sd = sOut.bids.minimum
+  	t == Unfilled(o) && sd.order == o && sd.remaining == o.shares
   })
 
-  test("add ask")(Prop.forAll(genAsk){ (o: Order) => 
+  test("add ask")(forAll(genAsk){ (o: Order) => 
   	val (t, sOut) = TransactionRunner.runTransaction(o, Stock(o.ticker))
-  	t == Unfilled(o) && sOut.asks.minimum == o
+    val sd = sOut.asks.minimum
+  	t == Unfilled(o) && sd.order == o && sd.remaining == o.shares
   })
 
-  test("add ask and bid")(Prop.forAll(genAsk, genBid){ 
-  	(ask:Order, bid: Order) => (bid.price > ask.price && ask.shares > bid.shares) ==> {
+  test("add ask and bid")(forAll(genAsk, genBid){ (ask:Order, bid: Order) => 
+    (bid.price > ask.price && ask.shares > bid.shares) ==> {
   	val (stock, trans) = runOrders(List(ask, bid))
-  	trans.length == 2 && stock.asks.minimum.shares == ask.shares - bid.shares
+  	trans.length == 2 && stock.asks.minimum.remaining == ask.shares - bid.shares
   }})
 
-  test("piles of orders")(forAll ((orders: List[Order]) => {
-  	orders.size > 1 ==> {
+  test("max bid always less than min sell")(forAll(nonEmptyListOf(genSimpleOrder)){ orders: List[Order] =>
   	val (stock, trans) = runOrders(orders)
   	if (stock.bids.isEmpty || stock.asks.isEmpty) true 
-  	else stock.bids.minimum.price < stock.asks.minimum.price
-  }}))
-*/
+  	else stock.bids.minimum.order.price < stock.asks.minimum.order.price
+  })
 
-  test("piles of orders")(Prop.forAll(listOf(oneOf(genSimpleAsk, genSimpleBid)))(orderFacts(_)))
+  test("main properties")(Prop.forAll(nonEmptyListOf(oneOf(genSimpleAsk, genSimpleBid)))(orderFacts))
 
-  def orderFacts(orders:List[Order]): Prop = orders.size > 1 ==> {
-        println("\n\nPiles of orders test:\n")
-        println("\nORDERS:\n\t" + orders.mkString("\n\t") + "\n")
-      val (stock, transactions) = runOrders(orders)
-        println("\nTRANSACTIONS:\n\t" + transactions.mkString("\n\t"))
-      val (bids, asks) = orders.partition(_.orderType==Bid)
-      val countBidShares = bids.map(_.shares).sum
-      val countAskShares = asks.map(_.shares).sum
-        println("BIDS: " + stock.bids.toList + ", nonEmpty: " + stock.bids.nonEmpty)
-        println("ASKS: " + stock.asks.toList + ", nonEmpty: " + stock.asks.nonEmpty)
-        println(s"bid shares: $countBidShares, ask shares: $countAskShares")
-      all(
-        "more bids than asks" |: (countBidShares > countAskShares) ==> stock.bids.nonEmpty,
-        "more asks than bids" |: (countBidShares < countAskShares) ==> stock.asks.nonEmpty
-      )
+  property("x") = secure {
+    orderFacts(List(
+      Order(0,"c0",Bid,"TEST",104,449.9784951829429), 
+      Order(1,"c1",Ask,"TEST",168,375.8993038677382), 
+      Order(2,"c2",Bid,"TEST",127,596.7779419756251)
+    ))
+  }
+
+  def orderFacts(orders:List[Order]): Prop = {
+    val (stock, transactions) = runOrders(orders)
+    val (bids, asks) = orders.partition(_.orderType==Bid)
+    val countBidShares = bids.map(_.shares).sum
+    val countAskShares = asks.map(_.shares).sum
+    // val debugString = {
+    //   def clean[A](l: List[A]) = l.map(_.toString).mkString("\n","\n\t", "")
+    //   val ordersString = s"\n\n\nORDERS:\n\t${clean(orders)}"
+    //   val transactionsString = s"TRANSACTIONS:\n\t${clean(transactions)}"
+    //   val bidsString = s"BIDS: ${clean(stock.bids.toList)}, nonEmpty: ${stock.bids.nonEmpty} shares: ${bids.map(_.shares).sum}"
+    //   val asksString = s"ASKS: ${clean(stock.asks.toList)}, nonEmpty: ${stock.asks.nonEmpty} shares: ${asks.map(_.shares).sum}"
+    //   clean(List(ordersString, transactionsString, bidsString, asksString))
+    // }
+    all(
+      "bid vs ask counts" |: (countBidShares ?|? countAskShares match {
+        case EQ => true
+        case LT => stock.asks.nonEmpty
+        case GT => stock.bids.nonEmpty
+      })
+    )
   }
 
   def runOrders(orders: List[Order], s:Stock=Stock("Test")): (Stock, List[Transaction]) = 

@@ -74,14 +74,8 @@ case class Stock (
          then we do not add it to the heap, we send the PartialFill back to the client
          otherwise we add it to the bids awaiting fulfillment
      */
-    if (drawHeap.isEmpty || ! priceMatch(order.price, drawHeap.minimum.order.price)) {
-      println("if   branch: " + order + " " + shareData)
-      (trans, drawHeap, entryHeap.insert(ShareData(order))(entryHeapOrder))
-      // trans match {
-      //   case Unfilled(_) => (trans, drawHeap, entryHeap.insert(order)(entryHeapOrder))
-      //   case _           => (trans, drawHeap, entryHeap)
-      // }
-    }
+    if (drawHeap.isEmpty || ! priceMatch(order.price, drawHeap.minimum.order.price))
+      (trans, drawHeap, entryHeap.insert(shareData)(entryHeapOrder))
     /* 
      We can now either partially fill, or completely fill the order.
      Basic idea:
@@ -97,7 +91,6 @@ case class Stock (
      */
     // to get the minimum frOrder a Heap, call: h.minimum
     else {
-      println("else branch: " + order + " " + shareData)
       val min = drawHeap.minimum
       // TODO: one problem with min here is that we might have only filled
       // some of the shares in it. we might need to send back
@@ -105,33 +98,28 @@ case class Stock (
       val newTransaction = trans.fill(min)
 
       // PERFECT FILL
-      if (min.remaining == shareData.remaining) {
-        println("perfect")
+      if (min.remaining == shareData.remaining)
         // we can completely fill the bid.
         (newTransaction, drawHeap.deleteMin, entryHeap)
-      }
+
       // FILL, keeping the current node on top of the heap, adjusting it's shares. 
-      else if (min.remaining > shareData.remaining) {
-        println("kinda perfect, but adjust min")
+      else if (min.remaining > shareData.remaining)
         // we can completely fill the bid, but the bids shares 
         // must be removed from the ask on top of the heap
         (newTransaction, drawHeap.adjustMin(_.fill(shareData.remaining)), entryHeap)
-      }
+      
       // PARTIAL FILL
       else {
-        println("partial fill, recur")
         // we can't completely fill the bid, so we need to recur.
         fillOrder(
-          // we recur needing fewer shares, since we filled min.shares shares.
-          order,
-          shareData.fill(min.remaining),
+          // we recur needing fewer shares, since we filled min.remaining shares.
+          order, shareData.fill(min.remaining),
           // min is preserved in the transaction
           newTransaction,
           // min.shares is now empty, so it is deleted
           drawHeap.deleteMin,
           // nothing happens to the entry heap
-          entryHeap,
-          entryHeapOrder
+          entryHeap, entryHeapOrder
         )(priceMatch)
       }
     }

@@ -30,7 +30,7 @@ object OrderArbitrary {
       tic <- arbTicker
       sh  <- Gen.choose(1,255)
       pri <- Gen.choose(0.0,1000.0)
-    } yield Order(id, cid, ty, tic, sh, pri)
+    } yield Order(oid, cid, ty, tic, sh, pri)
   }
 
   implicit val arbOrder: Arbitrary[Order] = Arbitrary(genOrder)
@@ -44,6 +44,8 @@ object OrderArbitrary {
   val genSimpleAsk:   Gen[Order] = genAsk   map simplify
 
   def simplify(order: Order) = order.copy(ticker="TEST", clientId="c")
+
+  def nonEmptyListOf[A](g: Gen[A]) = for { a <- g; as <- listOf(g) } yield a :: as
 }
 
 import OrderArbitrary._

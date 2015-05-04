@@ -47,7 +47,11 @@ object ShareData {
 }
 
 case class ShareData(remaining: Shares, collected: Shares, order: Order){
-  def fill(n: Shares) = copy(remaining=remaining-n, collected=collected+n)
+  def fill(n: Shares) = {
+    val newRemainder = if (n < remaining) remaining - n else 0
+    copy(remaining = newRemainder, collected=order.shares - newRemainder)
+  }
+  override def toString = s"ShareData(remaining: $remaining, collected: $collected, order: $order)"
 }
 
 /*
@@ -73,11 +77,11 @@ trait Transaction {
     origin:  Order,
     fillers: List[Order] 
   ) extends Transaction {
-    def fill(s: ShareData) = 
-      if (shares.remaining == s.remaining) 
-        Fill(shares.fill(s.remaining), origin, s.order :: fillers)
-      else 
-        copy(shares=shares.fill(s.remaining), fillers=s.order :: fillers)
+    def fill(s: ShareData) = {
+      val newShareData = shares.fill(s.remaining)
+      if(newShareData.remaining == 0) Fill(newShareData, origin, s.order :: fillers)
+      else PartialFill(newShareData, origin, s.order :: fillers)
+    }
   }
 
   // A Fill is a completely filled Order
