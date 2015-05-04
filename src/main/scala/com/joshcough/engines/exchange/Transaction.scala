@@ -36,39 +36,52 @@ trait TransactionRunner[S] {
   def runTransaction(o: Order, s: S): (Transaction, S)
 }
 
+object ShareData {
+  def apply(o: Order) = new ShareData(remaining=o.shares, collected=0, o)
+  val bidOrdering: Ord[ShareData] = new Ord[ShareData] {
+    def order(x: ShareData, y: ShareData): Ordering = y.order.price ?|? x.order.price
+  }
+  val askOrdering: Ord[ShareData] = new Ord[ShareData] {
+    def order(x: ShareData, y: ShareData): Ordering = x.order.price ?|? y.order.price
+  }
+}
+
+case class ShareData(remaining: Shares, collected: Shares, order: Order){
+  def fill(n: Shares) = copy(remaining=remaining-n, collected=collected+n)
+}
+
 /*
   A Transaction can represent a buy or an ask, and contains:
     * The number of shares filled, which might be less than the order wanted.
     * The original order (which contains the number of shares desired)
  */
 trait Transaction {
-  def shares  : Shares
+  def shares  : ShareData
   def origin  : Order
-  def isEmpty : Boolean = shares == 0
-  def fill(additionalShares: Shares, filler: Order): Transaction
+  def fill(additionalShares: ShareData): Transaction
 }
 
   // An Unfilled Transaction has no shares filled.
   case class Unfilled(origin: Order) extends Transaction {
-    val shares = 0
-    def fill(s: Shares, filler: Order) = PartialFill(s, List(filler), origin)
+    val shares = ShareData(origin)
+    def fill(s: ShareData) = PartialFill(shares.fill(s.remaining), origin, List(s.order))
   }
 
   // A PartialFill has a number of shares filled, but less than wanted.
   case class PartialFill(
-    shares:  Shares, 
-    fillers: List[Order], 
-    origin:  Order) extends Transaction {
-    def fill(additionalShares: Shares, filler: Order) = 
-      if (shares + additionalShares == origin.shares) Fill(origin, filler :: fillers)
-      else copy(shares=shares+additionalShares, fillers=filler :: fillers)
+    shares:  ShareData, 
+    origin:  Order,
+    fillers: List[Order] 
+  ) extends Transaction {
+    def fill(s: ShareData) = 
+      if (shares.remaining == s.remaining) 
+        Fill(shares.fill(s.remaining), origin, s.order :: fillers)
+      else 
+        copy(shares=shares.fill(s.remaining), fillers=s.order :: fillers)
   }
 
   // A Fill is a completely filled Order
-  case class Fill(origin: Order, fillers: List[Order]) extends Transaction {
-    def shares = origin.shares
-    def fill(additionalShares: Shares, filler: Order) = 
-      sys.error("can't fill an already full order: " ++ 
-        List(origin, fillers, additionalShares, filler).toString)
+  case class Fill(shares: ShareData, origin: Order, fillers: List[Order]) extends Transaction {
+    def fill(s: ShareData) = sys.error("can't fill an already full order: " + List(this, s).toString)
   }
 

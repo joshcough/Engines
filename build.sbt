@@ -36,7 +36,7 @@ javacOptions ++=
 
 javaOptions ++= Seq("-XX:MaxJavaStackTraceDepth=1000000 -Dscala.color")
 
-parallelExecution := true
+parallelExecution := false
 
 javacOptions += "-Xlint"
 

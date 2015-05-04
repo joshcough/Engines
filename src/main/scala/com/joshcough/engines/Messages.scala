@@ -35,15 +35,6 @@ object Order {
     and builds a Show instance for the new datatype appropriately?
   **/
   implicit val OrderShow: Show[Order] = Show.showFromToString
-
-  // Greatest bids go on top heap (Max heap)
-  val bidOrdering: Ord[Order] = new Ord[Order] {
-    def order(x: Order, y: Order): Ordering = y.price ?|? x.price
-  }
-  // Lowest asks go on top of the heap (Min heap)
-  val askOrdering: Ord[Order] = new Ord[Order] {
-    def order(x: Order, y: Order): Ordering = x.price ?|? y.price
-  }
 }
 
 case class Order(

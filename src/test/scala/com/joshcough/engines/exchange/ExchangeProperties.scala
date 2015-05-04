@@ -3,14 +3,7 @@ package exchange
 
 import org.scalacheck._
 import org.scalacheck.Prop._
-import Shrink._
-import Gen._
-import Arbitrary.arbitrary
-import Prop._
-import scodec.bits._
-import scodec._
-import scodec.bits._
-import codecs._
+import Gen.{listOf, oneOf}
 import scalaz.{Order => Ord, _}
 import Scalaz._
 
@@ -27,6 +20,7 @@ import StockArbitrary._
 
 object StockTests extends EngineProperties("StockTests") {
 
+/*
   test("simple")(forAll ((s: Stock) => s.bids.isEmpty && s.asks.isEmpty))
 
   test("add bid")(Prop.forAll(genBid){ (o: Order) => 
@@ -45,26 +39,35 @@ object StockTests extends EngineProperties("StockTests") {
   	trans.length == 2 && stock.asks.minimum.shares == ask.shares - bid.shares
   }})
 
-  var i = 0
-
   test("piles of orders")(forAll ((orders: List[Order]) => {
   	orders.size > 1 ==> {
   	val (stock, trans) = runOrders(orders)
-  	if (stock.bids.isEmpty && stock.asks.isEmpty) {
-  		i = i + 1 
-  		println (s"emptyness: $i, orders: ${orders.size}")
-  		if (orders.size < 5) println(testifyOrders(orders))
-  		true 
-  	}
+  	if (stock.bids.isEmpty || stock.asks.isEmpty) true 
   	else stock.bids.minimum.price < stock.asks.minimum.price
   }}))
+*/
 
-  def testifyOrders(orders: List[Order]) = orders.map(_.copy(ticker="TEST", clientId="c"))
+  test("piles of orders")(Prop.forAll(listOf(oneOf(genSimpleAsk, genSimpleBid)))(orderFacts(_)))
 
-  def runOrders(orders: List[Order]): (Stock, List[Transaction]) = {
-  	TransactionRunner.stateTransactions(
-  	  testifyOrders(orders))(Stock.stockTransactionRunner).apply(Stock("TEST"))
+  def orderFacts(orders:List[Order]): Prop = orders.size > 1 ==> {
+        println("\n\nPiles of orders test:\n")
+        println("\nORDERS:\n\t" + orders.mkString("\n\t") + "\n")
+      val (stock, transactions) = runOrders(orders)
+        println("\nTRANSACTIONS:\n\t" + transactions.mkString("\n\t"))
+      val (bids, asks) = orders.partition(_.orderType==Bid)
+      val countBidShares = bids.map(_.shares).sum
+      val countAskShares = asks.map(_.shares).sum
+        println("BIDS: " + stock.bids.toList + ", nonEmpty: " + stock.bids.nonEmpty)
+        println("ASKS: " + stock.asks.toList + ", nonEmpty: " + stock.asks.nonEmpty)
+        println(s"bid shares: $countBidShares, ask shares: $countAskShares")
+      all(
+        "more bids than asks" |: (countBidShares > countAskShares) ==> stock.bids.nonEmpty,
+        "more asks than bids" |: (countBidShares < countAskShares) ==> stock.asks.nonEmpty
+      )
   }
+
+  def runOrders(orders: List[Order], s:Stock=Stock("Test")): (Stock, List[Transaction]) = 
+    TransactionRunner.stateTransactions(orders)(Stock.stockTransactionRunner).apply(s)
 }
 
 
