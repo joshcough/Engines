@@ -1,5 +1,7 @@
 # Engines
 
+To reproduce weird scalaz-stream tcp behavior:
+
 In first terminal:
 
     ./sbt
